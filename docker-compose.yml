@@ -6,11 +6,8 @@ services:
     ports:
       - "8000:8000"
     environment:
-      # Jira Configuration (override with .env file or docker-compose.override.yml)
+      # Jira Configuration - authentication is now handled per-request
       JIRA_BASE_URL: "${JIRA_BASE_URL:-https://your-jira-instance.atlassian.net}"
-      JIRA_USERNAME: "${JIRA_USERNAME:-your-username}"
-      JIRA_PASSWORD: "${JIRA_PASSWORD:-your-api-token}"
-      JIRA_AUTH_TYPE: "${JIRA_AUTH_TYPE:-basic}"
 
       # Proxy Configuration
       PROXY_HOST: "0.0.0.0"
@@ -19,7 +16,7 @@ services:
 
       # App Configuration
       APP_TITLE: "Jira API Proxy"
-      APP_DESCRIPTION: "Proxy server for Jira API with JetBrains IDE compatibility"
+      APP_DESCRIPTION: "Proxy server for Jira API with JetBrains IDE compatibility - supports per-request authentication"
       APP_VERSION: "1.0.0"
 
       # Security
