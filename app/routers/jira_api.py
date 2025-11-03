@@ -3,7 +3,7 @@ from typing import Optional, List
 from app.services.jira_client import jira_client
 from app.models.jira import (
     ServerInfo, Issue, SearchResult, TransitionResponse,
-    CreateIssueRequest, UpdateIssueRequest, Project, ErrorResponse
+    CreateIssueRequest, UpdateIssueRequest, Project
 )
 import logging
 

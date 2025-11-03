@@ -1,48 +1,58 @@
 # Jira API Proxy Test Endpoints
+# Note: All endpoints except health checks now require Authorization header
 
-### Health Check
+### Health Check (No auth required)
 GET http://127.0.0.1:8000/
 Accept: application/json
 
-### Proxy Health Check
+### Proxy Health Check (No auth required)
 GET http://127.0.0.1:8000/rest/api/2/health
 Accept: application/json
 
 ### Get Server Info (Required for JetBrains IDE) - API v2
 GET http://127.0.0.1:8000/rest/api/2/serverInfo
 Accept: application/json
+Authorization: Basic {{base64-encoded-username:token}}
 
 ### Get Server Info (Required for JetBrains IDE) - API latest
 GET http://127.0.0.1:8000/rest/api/latest/serverInfo
 Accept: application/json
+Authorization: Basic {{base64-encoded-username:token}}
 
 ### Search Issues with JQL - API v2
 GET http://127.0.0.1:8000/rest/api/2/search?jql=project=TEST&maxResults=10
 Accept: application/json
+Authorization: Basic {{base64-encoded-username:token}}
 
 ### Search Issues with JQL - API latest (JetBrains)
 GET http://127.0.0.1:8000/rest/api/latest/search?jql=assignee=currentUser()&maxResults=10
 Accept: application/json
+Authorization: Basic {{base64-encoded-username:token}}
 
 ### Search Issues with JQL - JetBrains specific endpoint
 GET http://127.0.0.1:8000/rest/api/latest/search/jql?jql=assignee=currentUser()&maxResults=160&fields=id,key,summary,description,created,updated,duedate,resolutiondate,assignee,reporter,issuetype,comment,status
 Accept: application/json
+Authorization: Basic {{base64-encoded-username:token}}
 
 ### Get Specific Issue
 GET http://127.0.0.1:8000/rest/api/2/issue/TEST-1
 Accept: application/json
+Authorization: Basic {{base64-encoded-username:token}}
 
 ### Get Issue with Specific Fields
 GET http://127.0.0.1:8000/rest/api/2/issue/TEST-1?fields=summary,description,status
 Accept: application/json
+Authorization: Basic {{base64-encoded-username:token}}
 
 ### Get Issue Transitions
 GET http://127.0.0.1:8000/rest/api/2/issue/TEST-1/transitions
 Accept: application/json
+Authorization: Basic {{base64-encoded-username:token}}
 
 ### Transition Issue (Example: Move to In Progress)
 POST http://127.0.0.1:8000/rest/api/2/issue/TEST-1/transitions
 Content-Type: application/json
+Authorization: Basic {{base64-encoded-username:token}}
 
 {
   "transition": {
@@ -53,6 +63,7 @@ Content-Type: application/json
 ### Update Issue
 PUT http://127.0.0.1:8000/rest/api/2/issue/TEST-1
 Content-Type: application/json
+Authorization: Basic {{base64-encoded-username:token}}
 
 {
   "fields": {
@@ -63,6 +74,7 @@ Content-Type: application/json
 ### Create New Issue
 POST http://127.0.0.1:8000/rest/api/2/issue
 Content-Type: application/json
+Authorization: Basic {{base64-encoded-username:token}}
 
 {
   "fields": {
@@ -80,9 +92,16 @@ Content-Type: application/json
 ### Get All Projects
 GET http://127.0.0.1:8000/rest/api/2/project
 Accept: application/json
+Authorization: Basic {{base64-encoded-username:token}}
 
 ### Get Specific Project
 GET http://127.0.0.1:8000/rest/api/2/project/TEST
 Accept: application/json
+Authorization: Basic {{base64-encoded-username:token}}
+
+### Example with Bearer Token Authentication
+GET http://127.0.0.1:8000/rest/api/2/serverInfo
+Accept: application/json
+Authorization: Bearer {{your-api-token}}
 
 ###
