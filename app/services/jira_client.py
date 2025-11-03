@@ -16,44 +16,35 @@ logger = logging.getLogger(__name__)
 
 
 class JiraClient:
-    def __init__(self):
-        self.base_url = settings.jira_base_url.rstrip('/')
-        self.username = settings.jira_username
-        self.password = settings.jira_password
-        self.auth_type = settings.jira_auth_type
+    def __init__(self, base_url: Optional[str] = None):
+        self.base_url = (base_url or settings.jira_base_url).rstrip('/')
 
-        # Create auth headers
-        if self.auth_type == "basic":
-            credentials = f"{self.username}:{self.password}"
-            encoded_credentials = base64.b64encode(credentials.encode()).decode()
-            self.headers = {
-                "Authorization": f"Basic {encoded_credentials}",
-                "Content-Type": "application/json",
-                "Accept": "application/json"
-            }
-        else:  # token
-            self.headers = {
-                "Authorization": f"Bearer {self.password}",
-                "Content-Type": "application/json",
-                "Accept": "application/json"
-            }
+    def _create_headers(self, authorization: str) -> Dict[str, str]:
+        """Create headers with the provided authorization"""
+        return {
+            "Authorization": authorization,
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
 
     async def _make_request(
         self,
         method: str,
         endpoint: str,
+        authorization: str,
         params: Optional[Dict[str, Any]] = None,
         json_data: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Make authenticated request to Jira API"""
         url = f"{self.base_url}{endpoint}"
+        headers = self._create_headers(authorization)
 
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.request(
                     method=method,
                     url=url,
-                    headers=self.headers,
+                    headers=headers,
                     params=params,
                     json=json_data,
                     timeout=30.0
@@ -85,13 +76,14 @@ class JiraClient:
                 logger.error(f"Unexpected error: {str(e)}")
                 raise JiraConnectionError(f"Unexpected error communicating with Jira: {str(e)}")
 
-    async def get_server_info(self) -> ServerInfo:
+    async def get_server_info(self, authorization: str) -> ServerInfo:
         """Get Jira server information"""
-        data = await self._make_request("GET", "/rest/api/2/serverInfo")
+        data = await self._make_request("GET", "/rest/api/2/serverInfo", authorization)
         return ServerInfo(**data)
 
     async def search_issues(
         self,
+        authorization: str,
         jql: str,
         start_at: int = 0,
         max_results: int = 50,
@@ -107,7 +99,7 @@ class JiraClient:
             params["fields"] = ",".join(fields)
 
         # Use the new API v3 search/jql endpoint as the old ones are deprecated
-        data = await self._make_request("GET", "/rest/api/3/search/jql", params=params)
+        data = await self._make_request("GET", "/rest/api/3/search/jql", authorization, params=params)
 
         # Convert the simplified response from search/jql to the full SearchResult format
         # The new endpoint returns a simplified format, so we need to transform it
@@ -124,7 +116,7 @@ class JiraClient:
                         issue_key = issue.get("key")
                         if not issue_key and "id" in issue:
                             # Try to get issue key from id - this is a workaround
-                            issue_detail = await self._make_request("GET", f"/rest/api/3/issue/{issue['id']}")
+                            issue_detail = await self._make_request("GET", f"/rest/api/3/issue/{issue['id']}", authorization)
                             full_issues.append(issue_detail)
                     except:
                         # If we can't get details, include what we have
@@ -149,21 +141,21 @@ class JiraClient:
 
         return SearchResult(**result_data)
 
-    async def get_issue(self, issue_key: str, fields: Optional[List[str]] = None) -> Issue:
+    async def get_issue(self, authorization: str, issue_key: str, fields: Optional[List[str]] = None) -> Issue:
         """Get specific issue by key"""
         params = {}
         if fields:
             params["fields"] = ",".join(fields)
 
-        data = await self._make_request("GET", f"/rest/api/2/issue/{issue_key}", params=params)
+        data = await self._make_request("GET", f"/rest/api/2/issue/{issue_key}", authorization, params=params)
         return Issue(**data)
 
-    async def get_issue_transitions(self, issue_key: str) -> TransitionResponse:
+    async def get_issue_transitions(self, authorization: str, issue_key: str) -> TransitionResponse:
         """Get available transitions for an issue"""
-        data = await self._make_request("GET", f"/rest/api/2/issue/{issue_key}/transitions")
+        data = await self._make_request("GET", f"/rest/api/2/issue/{issue_key}/transitions", authorization)
         return TransitionResponse(**data)
 
-    async def transition_issue(self, issue_key: str, transition_id: str, fields: Optional[Dict[str, Any]] = None):
+    async def transition_issue(self, authorization: str, issue_key: str, transition_id: str, fields: Optional[Dict[str, Any]] = None):
         """Transition an issue to a new status"""
         json_data = {
             "transition": {"id": transition_id}
@@ -171,27 +163,27 @@ class JiraClient:
         if fields:
             json_data["fields"] = fields
 
-        await self._make_request("POST", f"/rest/api/2/issue/{issue_key}/transitions", json_data=json_data)
+        await self._make_request("POST", f"/rest/api/2/issue/{issue_key}/transitions", authorization, json_data=json_data)
 
-    async def create_issue(self, issue_data: CreateIssueRequest) -> Issue:
+    async def create_issue(self, authorization: str, issue_data: CreateIssueRequest) -> Issue:
         """Create a new issue"""
-        data = await self._make_request("POST", "/rest/api/2/issue", json_data=issue_data.dict())
+        data = await self._make_request("POST", "/rest/api/2/issue", authorization, json_data=issue_data.dict())
         return Issue(**data)
 
-    async def update_issue(self, issue_key: str, update_data: UpdateIssueRequest):
+    async def update_issue(self, authorization: str, issue_key: str, update_data: UpdateIssueRequest):
         """Update an existing issue"""
-        await self._make_request("PUT", f"/rest/api/2/issue/{issue_key}", json_data=update_data.dict(exclude_none=True))
+        await self._make_request("PUT", f"/rest/api/2/issue/{issue_key}", authorization, json_data=update_data.dict(exclude_none=True))
 
-    async def get_projects(self) -> List[Project]:
+    async def get_projects(self, authorization: str) -> List[Project]:
         """Get all projects"""
-        data = await self._make_request("GET", "/rest/api/2/project")
+        data = await self._make_request("GET", "/rest/api/2/project", authorization)
         return [Project(**project) for project in data]
 
-    async def get_project(self, project_key: str) -> Project:
+    async def get_project(self, authorization: str, project_key: str) -> Project:
         """Get specific project by key"""
-        data = await self._make_request("GET", f"/rest/api/2/project/{project_key}")
+        data = await self._make_request("GET", f"/rest/api/2/project/{project_key}", authorization)
         return Project(**data)
 
 
-# Global client instance
+# Global client instance - no longer needs auth at startup
 jira_client = JiraClient()

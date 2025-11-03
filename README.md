@@ -1,12 +1,12 @@
 # Jira API Proxy
 
-JetBrains IDE와 호환되는 Jira API Proxy 서버입니다. 이 프록시 서버를 통해 JetBrains IDE (IntelliJ IDEA, PyCharm 등)의 Task Management 기능을 실제 Jira 서버와 연동할 수 있습니다.
+JetBrains IDE와 호환되는 Jira API Proxy 서버입니다. 이 프록시 서버를 통해 JetBrains IDE (IntelliJ IDEA, PyCharm 등)의 Task Management 기능을 실제 Jira 서버와 연동할 수 있습니다. 요청별 인증을 지원하여 보안성이 향상되었습니다.
 
 ## 주요 기능
 
 - ✅ Jira REST API v2 호환 엔드포인트 제공
 - ✅ JetBrains IDE Task Management 완벽 지원
-- ✅ Basic/Token 인증 지원
+- ✅ 요청별 Basic/Bearer Token 인증 지원 (더 이상 환경변수에 자격증명 저장 불필요)
 - ✅ Docker 컨테이너 지원
 - ✅ 종합적인 에러 핸들링 및 로깅
 - ✅ CORS 및 보안 헤더 지원
@@ -46,16 +46,16 @@ cp .env.example .env
 
 `.env` 파일 예시:
 ```env
-# Jira Configuration
+# Jira Configuration - 인증은 요청별로 처리됩니다
 JIRA_BASE_URL=https://your-jira-instance.atlassian.net
-JIRA_USERNAME=your-email@company.com
-JIRA_PASSWORD=your-api-token
-JIRA_AUTH_TYPE=basic
 
 # Proxy Server Configuration
 PROXY_HOST=0.0.0.0
 PROXY_PORT=8000
 DEBUG=true
+
+# 참고: 인증 정보는 더 이상 환경변수에 설정하지 않습니다.
+# 대신 각 API 요청의 Authorization 헤더를 통해 전달됩니다.
 ```
 
 ### Docker로 실행 (권장)
@@ -90,8 +90,9 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 5. `Generic` 또는 `JIRA` 선택
 6. 다음 설정을 입력:
    - **Server URL**: `http://localhost:8000` (또는 프록시 서버 주소)
-   - **Username**: Jira 사용자명
+   - **Username**: Jira 사용자명 (Basic 인증용)
    - **Password**: Jira API 토큰 또는 비밀번호
+   - **참고**: 인증 정보는 각 요청의 Authorization 헤더로 전달되어 보안이 강화되었습니다
 
 ### 설정 예시
 

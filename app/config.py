@@ -3,11 +3,8 @@ from typing import Optional
 
 
 class Settings(BaseSettings):
-    # Jira configuration
-    jira_base_url: str
-    jira_username: str
-    jira_password: str  # API token for Jira Cloud or password for Jira Server
-    jira_auth_type: str = "basic"  # basic or token
+    # Jira configuration - only base URL needed for proxy
+    jira_base_url: str = "https://your-jira-instance.atlassian.net"  # Default fallback
 
     # Proxy server configuration
     proxy_host: str = "0.0.0.0"
@@ -16,7 +13,7 @@ class Settings(BaseSettings):
 
     # Application configuration
     app_title: str = "Jira API Proxy"
-    app_description: str = "Proxy server for Jira API with JetBrains IDE compatibility"
+    app_description: str = "Proxy server for Jira API with JetBrains IDE compatibility - supports per-request authentication"
     app_version: str = "1.0.0"
 
     # Security
