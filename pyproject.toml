@@ -1,0 +1,13 @@
+[project]
+name = "jiraproxy"
+version = "0.1.0"
+description = "Jira API Proxy Server for JetBrains Integration"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.120.4",
+    "uvicorn>=0.38.0",
+    "httpx>=0.27.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "python-multipart>=0.0.6",
+]
