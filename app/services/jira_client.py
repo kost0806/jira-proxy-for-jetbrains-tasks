@@ -2,10 +2,7 @@ import httpx
 import base64
 from typing import Optional, Dict, Any, List
 from app.config import settings
-from app.models.jira import (
-    ServerInfo, Issue, SearchResult, TransitionResponse,
-    CreateIssueRequest, UpdateIssueRequest, Project
-)
+from app.models.jira import CreateIssueRequest, UpdateIssueRequest
 from app.exceptions import (
     JiraConnectionError, JiraAuthenticationError, JiraNotFoundError,
     JiraPermissionError, JiraValidationError
@@ -106,10 +103,9 @@ class JiraClient:
                 logger.error(f"Unexpected error: {str(e)}")
                 raise JiraConnectionError(f"Unexpected error communicating with Jira: {str(e)}")
 
-    async def get_server_info(self) -> ServerInfo:
+    async def get_server_info(self) -> Dict[str, Any]:
         """Get Jira server information"""
-        data = await self._make_request("GET", "/rest/api/2/serverInfo")
-        return ServerInfo(**data)
+        return await self._make_request("GET", "/rest/api/2/serverInfo")
 
     async def search_issues(
         self,
@@ -117,7 +113,7 @@ class JiraClient:
         start_at: int = 0,
         max_results: int = 50,
         fields: Optional[List[str]] = None
-    ) -> SearchResult:
+    ) -> Dict[str, Any]:
         """Search issues using JQL"""
         params = {
             "jql": jql,
@@ -127,62 +123,20 @@ class JiraClient:
         if fields:
             params["fields"] = ",".join(fields)
 
-        # Use the new API v3 search/jql endpoint as the old ones are deprecated
-        data = await self._make_request("GET", "/rest/api/3/search/jql", params=params)
+        # Use the standard API v2 search endpoint
+        return await self._make_request("GET", "/rest/api/2/search", params=params)
 
-        # Convert the simplified response from search/jql to the full SearchResult format
-        # The new endpoint returns a simplified format, so we need to transform it
-        issues = data.get("issues", [])
-
-        # If we have issues but they're simplified, we need to get full details
-        if issues and isinstance(issues[0], dict) and "fields" not in issues[0]:
-            # This is the simplified format, fetch full details for each issue
-            full_issues = []
-            for issue in issues:
-                if "id" in issue:
-                    try:
-                        # Get the issue key from the basic info or construct it
-                        issue_key = issue.get("key")
-                        if not issue_key and "id" in issue:
-                            # Try to get issue key from id - this is a workaround
-                            issue_detail = await self._make_request("GET", f"/rest/api/3/issue/{issue['id']}")
-                            full_issues.append(issue_detail)
-                    except:
-                        # If we can't get details, include what we have
-                        full_issues.append(issue)
-
-            result_data = {
-                "expand": data.get("expand", ""),
-                "startAt": start_at,
-                "maxResults": max_results,
-                "total": len(issues),  # We don't have total count in new API
-                "issues": full_issues
-            }
-        else:
-            # Already in the correct format or no issues
-            result_data = {
-                "expand": data.get("expand", ""),
-                "startAt": start_at,
-                "maxResults": max_results,
-                "total": len(issues),
-                "issues": issues
-            }
-
-        return SearchResult(**result_data)
-
-    async def get_issue(self, issue_key: str, fields: Optional[List[str]] = None) -> Issue:
+    async def get_issue(self, issue_key: str, fields: Optional[List[str]] = None) -> Dict[str, Any]:
         """Get specific issue by key"""
         params = {}
         if fields:
             params["fields"] = ",".join(fields)
 
-        data = await self._make_request("GET", f"/rest/api/2/issue/{issue_key}", params=params)
-        return Issue(**data)
+        return await self._make_request("GET", f"/rest/api/2/issue/{issue_key}", params=params)
 
-    async def get_issue_transitions(self, issue_key: str) -> TransitionResponse:
+    async def get_issue_transitions(self, issue_key: str) -> Dict[str, Any]:
         """Get available transitions for an issue"""
-        data = await self._make_request("GET", f"/rest/api/2/issue/{issue_key}/transitions")
-        return TransitionResponse(**data)
+        return await self._make_request("GET", f"/rest/api/2/issue/{issue_key}/transitions")
 
     async def transition_issue(self, issue_key: str, transition_id: str, fields: Optional[Dict[str, Any]] = None):
         """Transition an issue to a new status"""
@@ -194,24 +148,21 @@ class JiraClient:
 
         await self._make_request("POST", f"/rest/api/2/issue/{issue_key}/transitions", json_data=json_data)
 
-    async def create_issue(self, issue_data: CreateIssueRequest) -> Issue:
+    async def create_issue(self, issue_data: CreateIssueRequest) -> Dict[str, Any]:
         """Create a new issue"""
-        data = await self._make_request("POST", "/rest/api/2/issue", json_data=issue_data.dict())
-        return Issue(**data)
+        return await self._make_request("POST", "/rest/api/2/issue", json_data=issue_data.dict())
 
     async def update_issue(self, issue_key: str, update_data: UpdateIssueRequest):
         """Update an existing issue"""
         await self._make_request("PUT", f"/rest/api/2/issue/{issue_key}", json_data=update_data.dict(exclude_none=True))
 
-    async def get_projects(self) -> List[Project]:
+    async def get_projects(self) -> List[Dict[str, Any]]:
         """Get all projects"""
-        data = await self._make_request("GET", "/rest/api/2/project")
-        return [Project(**project) for project in data]
+        return await self._make_request("GET", "/rest/api/2/project")
 
-    async def get_project(self, project_key: str) -> Project:
+    async def get_project(self, project_key: str) -> Dict[str, Any]:
         """Get specific project by key"""
-        data = await self._make_request("GET", f"/rest/api/2/project/{project_key}")
-        return Project(**data)
+        return await self._make_request("GET", f"/rest/api/2/project/{project_key}")
 
 
 # Global client instance - no longer needs auth at startup
