@@ -1,15 +1,14 @@
 # Jira API Proxy
 
-JetBrains IDE와 호환되는 Jira API Proxy 서버입니다. 이 프록시 서버를 통해 JetBrains IDE (IntelliJ IDEA, PyCharm 등)의 Task Management 기능을 실제 Jira 서버와 연동할 수 있습니다. 이중 인증(Dual Authentication) 모드를 지원하여 API 인증과 사용자 활동 추적을 분리할 수 있습니다.
+JetBrains IDE와 호환되는 Jira API Proxy 서버입니다. 이 프록시 서버를 통해 JetBrains IDE (IntelliJ IDEA, PyCharm 등)의 Task Management 기능을 실제 Jira 서버와 연동할 수 있습니다. 서비스 계정 옵션을 지원하여 중앙화된 인증 관리가 가능합니다.
 
 ## 주요 기능
 
 - ✅ Jira REST API v2 호환 엔드포인트 제공
 - ✅ JetBrains IDE Task Management 완벽 지원
-- ✅ **이중 인증 (Dual Authentication) 모드**
-  - 서비스 계정을 통한 중앙화된 API 인증
-  - 요청한 사용자의 활동 추적 (Jira Activity에 실제 사용자 기록)
-  - 사용자 가장(User Impersonation) 지원 (Jira Server/Data Center)
+- ✅ **유연한 인증 모드**
+  - 서비스 계정을 통한 중앙화된 인증 (선택사항)
+  - 요청별 개별 사용자 인증 지원
 - ✅ Docker 컨테이너 지원
 - ✅ 종합적인 에러 핸들링 및 로깅
 - ✅ CORS 및 보안 헤더 지원
@@ -52,20 +51,16 @@ cp .env.example .env
 # Jira Configuration
 JIRA_BASE_URL=https://your-jira-instance.atlassian.net
 
-# Service Account Credentials (for API authentication)
-# 이 계정의 자격증명으로 Jira API에 인증합니다
-JIRA_SERVICE_USERNAME=service-account@example.com
-JIRA_SERVICE_API_TOKEN=your-service-account-api-token
+# Service Account Credentials (Optional)
+# 설정하면 모든 API 호출에 이 자격증명을 사용합니다
+# 설정하지 않으면 각 요청의 Authorization 헤더의 자격증명을 사용합니다
+JIRA_SERVICE_USERNAME=
+JIRA_SERVICE_API_TOKEN=
 
 # Proxy Server Configuration
 PROXY_HOST=0.0.0.0
 PROXY_PORT=8000
 DEBUG=true
-
-# 이중 인증 모드:
-# - API 호출은 위의 서비스 계정 자격증명 사용
-# - Activity 추적은 Authorization 헤더의 사용자 정보 사용
-# - 이를 통해 중앙화된 인증과 개별 사용자 책임 추적을 동시에 지원
 ```
 
 ### Docker로 실행 (권장)
@@ -100,31 +95,27 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 5. `Generic` 또는 `JIRA` 선택
 6. 다음 설정을 입력:
    - **Server URL**: `http://localhost:8000` (또는 프록시 서버 주소)
-   - **Username**: 실제 Jira 사용자명 (Activity 추적용)
-   - **Password**: 실제 사용자의 Jira API 토큰
-   - **참고**:
-     - 프록시는 `.env`의 서비스 계정으로 Jira에 인증합니다
-     - IDE에서 입력한 사용자 정보는 Activity 기록에 사용됩니다
-     - 이중 인증을 통해 중앙 관리와 사용자 책임 추적이 가능합니다
+   - **Username**: Jira 사용자명
+   - **Password**: Jira API 토큰
 
 ### 설정 예시
 
+**옵션 1: 개별 사용자 인증 (서비스 계정 미설정)**
 ```
 Server URL: http://localhost:8000
-Username: john.doe@company.com  ← Activity에 기록될 실제 사용자
-Password: user-api-token        ← 사용자 식별용 (API 인증은 서비스 계정 사용)
+Username: john.doe@company.com
+Password: user-jira-api-token
 ```
+→ 각 사용자의 자격증명으로 인증하며, Jira에서 해당 사용자로 활동이 기록됩니다.
 
-### 이중 인증 모드 작동 방식
-
-1. **IDE에서 요청**: 사용자가 JetBrains IDE에서 이슈 상태를 변경
-2. **프록시 수신**: Authorization 헤더에서 사용자명 추출 (`john.doe@company.com`)
-3. **Jira API 호출**:
-   - 인증: `.env`의 서비스 계정 자격증명 사용
-   - 사용자 가장: `X-Atlassian-User` 헤더에 `john.doe@company.com` 전달
-4. **Jira Activity**: 실제 작업자로 `john.doe@company.com`이 기록됨
-
-**참고**: 사용자 가장(User Impersonation) 기능은 Jira Server/Data Center에서 관리자 권한이 필요합니다. Jira Cloud에서는 제한적으로 지원됩니다.
+**옵션 2: 서비스 계정 인증 (서비스 계정 설정)**
+```
+Server URL: http://localhost:8000
+Username: (아무 값이나 입력 가능)
+Password: (아무 값이나 입력 가능)
+```
+→ `.env`에 설정된 서비스 계정으로 모든 API 호출이 이루어지며, Jira에서 서비스 계정으로 활동이 기록됩니다.
+→ IDE에 입력한 Username/Password는 무시됩니다.
 
 ## API 사용 예시
 
@@ -157,8 +148,7 @@ JiraProxy/
 ├── app/
 │   ├── __init__.py
 │   ├── main.py              # FastAPI 애플리케이션 진입점
-│   ├── config.py            # 설정 관리 (이중 인증 설정 포함)
-│   ├── utils.py             # 유틸리티 함수 (사용자 추출, 헤더 생성)
+│   ├── config.py            # 설정 관리 (서비스 계정 설정 포함)
 │   ├── exceptions.py        # 커스텀 예외 클래스
 │   ├── middleware.py        # 미들웨어 (로깅, 보안 헤더)
 │   ├── error_handlers.py    # 전역 에러 핸들러
@@ -167,7 +157,7 @@ JiraProxy/
 │   │   └── jira.py          # Jira API 데이터 모델
 │   ├── services/
 │   │   ├── __init__.py
-│   │   └── jira_client.py   # Jira API 클라이언트 (이중 인증 지원)
+│   │   └── jira_client.py   # Jira API 클라이언트 (유연한 인증 지원)
 │   └── routers/
 │       ├── __init__.py
 │       ├── jira_api.py      # API 라우터 (API v2)
@@ -180,48 +170,34 @@ JiraProxy/
 └── README.md              # 프로젝트 문서
 ```
 
-## 이중 인증 모드 (Dual Authentication)
+## 서비스 계정 인증 (선택사항)
 
-### 개요
-이중 인증 모드는 API 인증과 사용자 활동 추적을 분리하여 다음과 같은 이점을 제공합니다:
+서비스 계정 기능을 사용하면 중앙화된 자격증명으로 모든 API 호출을 관리할 수 있습니다.
 
-- **중앙화된 API 인증**: 모든 API 호출은 서비스 계정의 자격증명 사용
-- **개별 사용자 책임 추적**: Jira Activity에 실제 작업을 수행한 사용자 기록
-- **보안 강화**: 개별 사용자의 API 토큰을 관리할 필요 없음
-- **감사 추적**: 누가 어떤 작업을 했는지 명확히 추적 가능
+### 사용 방법
 
-### 설정 방법
-
-1. `.env` 파일에 서비스 계정 자격증명 설정:
+`.env` 파일에 서비스 계정 자격증명을 설정:
 ```env
 JIRA_SERVICE_USERNAME=service-account@company.com
 JIRA_SERVICE_API_TOKEN=service-account-api-token
 ```
 
-2. JetBrains IDE에서 실제 사용자 정보로 로그인
+### 특징
 
-3. 프록시가 자동으로:
-   - 서비스 계정으로 Jira API에 인증
-   - 사용자 정보를 `X-Atlassian-User` 헤더로 전달하여 Activity 기록
+- **중앙화된 관리**: 하나의 서비스 계정으로 모든 API 접근 관리
+- **간편한 설정**: 개별 사용자의 API 토큰을 관리할 필요 없음
+- **Activity 기록**: Jira에서 모든 활동이 서비스 계정으로 기록됨
 
-### 지원 플랫폼
+### 주의사항
 
-| Jira 플랫폼 | 지원 여부 | 요구사항 |
-|------------|----------|---------|
-| Jira Server/Data Center | ✅ 완전 지원 | 서비스 계정에 관리자 권한 필요 |
-| Jira Cloud | ⚠️ 제한적 지원 | 사용자 가장 기능 제한적 |
-
-### 기술적 구현
-
-- **인증 헤더**: `Authorization: Basic <service-account-credentials>`
-- **가장 헤더**: `X-Atlassian-User: <actual-user-email>`
-- **사용자 추출**: Authorization 헤더에서 Base64 디코딩하여 사용자명 추출
+- 서비스 계정을 사용하면 누가 작업을 수행했는지 Jira에서 구분할 수 없습니다
+- 개별 사용자 추적이 필요한 경우 서비스 계정을 설정하지 마세요
+- 서비스 계정에는 필요한 최소 권한만 부여하세요 (최소 권한 원칙)
 
 ## 보안 고려사항
 
-- **서비스 계정 보안**: `.env` 파일의 서비스 계정 자격증명을 안전하게 관리
-- **권한 관리**: 서비스 계정에 필요한 최소 권한만 부여 (최소 권한 원칙)
-- **사용자 검증**: 실제 사용자 권한도 Jira에서 검증됨
+- **자격증명 보안**: `.env` 파일의 자격증명을 안전하게 관리
+- **권한 관리**: 계정에 필요한 최소 권한만 부여 (최소 권한 원칙)
 - **CORS 설정**: 운영 환경에 맞게 CORS 설정 조정
 - **HTTPS 사용**: 운영 환경에서는 반드시 HTTPS 사용
 - **보안 헤더**: X-Content-Type-Options, X-Frame-Options 등 자동 추가
@@ -263,15 +239,9 @@ docker-compose logs -f
    - Health Check 엔드포인트 확인: `http://localhost:8000/rest/api/2/health`
 
 3. **권한 오류**
-   - 서비스 계정의 권한 확인 (관리자 권한 필요 시)
-   - 실제 사용자 계정의 Jira 권한 확인
+   - 사용 중인 Jira 계정의 권한 확인
    - API 토큰의 유효성 확인
-
-4. **사용자 가장(User Impersonation)이 작동하지 않음**
-   - Jira Server/Data Center 사용 중인지 확인 (Jira Cloud는 제한적 지원)
-   - 서비스 계정에 관리자 권한이 있는지 확인
-   - 로그에서 `X-Atlassian-User` 헤더가 전송되는지 확인
-   - Jira에서 사용자 가장 기능이 활성화되어 있는지 확인
+   - 서비스 계정을 사용하는 경우, 서비스 계정의 권한 확인
 
 ### 디버깅
 

@@ -10,7 +10,6 @@ from app.exceptions import (
     JiraConnectionError, JiraAuthenticationError, JiraNotFoundError,
     JiraPermissionError, JiraValidationError
 )
-from app.utils import create_service_auth_header
 import logging
 
 logger = logging.getLogger(__name__)
@@ -20,48 +19,35 @@ class JiraClient:
     def __init__(self, base_url: Optional[str] = None):
         self.base_url = (base_url or settings.jira_base_url).rstrip('/')
 
-    def _create_headers(self, acting_user: Optional[str] = None) -> Dict[str, str]:
+    def _create_headers(self, authorization: str) -> Dict[str, str]:
         """
         Create headers for Jira API requests.
 
-        Uses service account credentials for authentication.
-        If acting_user is provided, adds X-Atlassian-User header for user impersonation
-        (requires admin permissions on Jira Server/Data Center).
+        Uses service account credentials if configured, otherwise uses the provided authorization.
 
         Args:
-            acting_user: Optional username to act as (for impersonation)
+            authorization: Authorization header from the request
 
         Returns:
             Dictionary of HTTP headers
         """
-        # Use service account credentials for authentication
+        # Use service account credentials if configured, otherwise use provided authorization
         if settings.jira_service_username and settings.jira_service_api_token:
-            auth_header = create_service_auth_header(
-                settings.jira_service_username,
-                settings.jira_service_api_token
-            )
+            # Create service account authorization
+            credentials = f"{settings.jira_service_username}:{settings.jira_service_api_token}"
+            encoded_credentials = base64.b64encode(credentials.encode("utf-8")).decode("utf-8")
+            auth_header = f"Basic {encoded_credentials}"
+            logger.debug("Using service account credentials for authentication")
         else:
-            logger.warning(
-                "Service account credentials not configured. "
-                "Please set JIRA_SERVICE_USERNAME and JIRA_SERVICE_API_TOKEN in .env"
-            )
-            # This will likely fail authentication, but we'll let Jira return the error
-            auth_header = "Basic "
+            # Use the authorization header from the request
+            auth_header = authorization
+            logger.debug("Using request authorization header for authentication")
 
-        headers = {
+        return {
             "Authorization": auth_header,
             "Content-Type": "application/json",
             "Accept": "application/json"
         }
-
-        # Add impersonation header if acting user is provided
-        # Note: This requires admin permissions on Jira Server/Data Center
-        # Jira Cloud does not support this header
-        if acting_user:
-            headers["X-Atlassian-User"] = acting_user
-            logger.debug(f"Added X-Atlassian-User header for impersonation: {acting_user}")
-
-        return headers
 
     async def _make_request(
         self,
@@ -69,28 +55,25 @@ class JiraClient:
         endpoint: str,
         authorization: str,
         params: Optional[Dict[str, Any]] = None,
-        json_data: Optional[Dict[str, Any]] = None,
-        acting_user: Optional[str] = None
+        json_data: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Make authenticated request to Jira API.
 
-        Uses service account credentials for authentication.
-        If acting_user is provided, adds impersonation headers.
+        Uses service account credentials if configured, otherwise uses the provided authorization.
 
         Args:
             method: HTTP method (GET, POST, PUT, etc.)
             endpoint: Jira API endpoint
-            authorization: Client authorization header (used only to extract acting user if needed)
+            authorization: Client authorization header
             params: Query parameters
             json_data: JSON request body
-            acting_user: Username to act as (for impersonation)
 
         Returns:
             Response data as dictionary
         """
         url = f"{self.base_url}{endpoint}"
-        headers = self._create_headers(acting_user)
+        headers = self._create_headers(authorization)
 
         async with httpx.AsyncClient() as client:
             try:
@@ -129,14 +112,9 @@ class JiraClient:
                 logger.error(f"Unexpected error: {str(e)}")
                 raise JiraConnectionError(f"Unexpected error communicating with Jira: {str(e)}")
 
-    async def get_server_info(self, authorization: str, acting_user: Optional[str] = None) -> ServerInfo:
+    async def get_server_info(self, authorization: str) -> ServerInfo:
         """Get Jira server information"""
-        data = await self._make_request(
-            "GET",
-            "/rest/api/2/serverInfo",
-            authorization,
-            acting_user=acting_user
-        )
+        data = await self._make_request("GET", "/rest/api/2/serverInfo", authorization)
         return ServerInfo(**data)
 
     async def search_issues(
@@ -145,8 +123,7 @@ class JiraClient:
         jql: str,
         start_at: int = 0,
         max_results: int = 50,
-        fields: Optional[List[str]] = None,
-        acting_user: Optional[str] = None
+        fields: Optional[List[str]] = None
     ) -> SearchResult:
         """Search issues using JQL"""
         params = {
@@ -158,13 +135,7 @@ class JiraClient:
             params["fields"] = ",".join(fields)
 
         # Use the new API v3 search/jql endpoint as the old ones are deprecated
-        data = await self._make_request(
-            "GET",
-            "/rest/api/3/search/jql",
-            authorization,
-            params=params,
-            acting_user=acting_user
-        )
+        data = await self._make_request("GET", "/rest/api/3/search/jql", authorization, params=params)
 
         # Convert the simplified response from search/jql to the full SearchResult format
         # The new endpoint returns a simplified format, so we need to transform it
@@ -181,12 +152,7 @@ class JiraClient:
                         issue_key = issue.get("key")
                         if not issue_key and "id" in issue:
                             # Try to get issue key from id - this is a workaround
-                            issue_detail = await self._make_request(
-                                "GET",
-                                f"/rest/api/3/issue/{issue['id']}",
-                                authorization,
-                                acting_user=acting_user
-                            )
+                            issue_detail = await self._make_request("GET", f"/rest/api/3/issue/{issue['id']}", authorization)
                             full_issues.append(issue_detail)
                     except:
                         # If we can't get details, include what we have
@@ -211,50 +177,21 @@ class JiraClient:
 
         return SearchResult(**result_data)
 
-    async def get_issue(
-        self,
-        authorization: str,
-        issue_key: str,
-        fields: Optional[List[str]] = None,
-        acting_user: Optional[str] = None
-    ) -> Issue:
+    async def get_issue(self, authorization: str, issue_key: str, fields: Optional[List[str]] = None) -> Issue:
         """Get specific issue by key"""
         params = {}
         if fields:
             params["fields"] = ",".join(fields)
 
-        data = await self._make_request(
-            "GET",
-            f"/rest/api/2/issue/{issue_key}",
-            authorization,
-            params=params,
-            acting_user=acting_user
-        )
+        data = await self._make_request("GET", f"/rest/api/2/issue/{issue_key}", authorization, params=params)
         return Issue(**data)
 
-    async def get_issue_transitions(
-        self,
-        authorization: str,
-        issue_key: str,
-        acting_user: Optional[str] = None
-    ) -> TransitionResponse:
+    async def get_issue_transitions(self, authorization: str, issue_key: str) -> TransitionResponse:
         """Get available transitions for an issue"""
-        data = await self._make_request(
-            "GET",
-            f"/rest/api/2/issue/{issue_key}/transitions",
-            authorization,
-            acting_user=acting_user
-        )
+        data = await self._make_request("GET", f"/rest/api/2/issue/{issue_key}/transitions", authorization)
         return TransitionResponse(**data)
 
-    async def transition_issue(
-        self,
-        authorization: str,
-        issue_key: str,
-        transition_id: str,
-        fields: Optional[Dict[str, Any]] = None,
-        acting_user: Optional[str] = None
-    ):
+    async def transition_issue(self, authorization: str, issue_key: str, transition_id: str, fields: Optional[Dict[str, Any]] = None):
         """Transition an issue to a new status"""
         json_data = {
             "transition": {"id": transition_id}
@@ -262,69 +199,25 @@ class JiraClient:
         if fields:
             json_data["fields"] = fields
 
-        await self._make_request(
-            "POST",
-            f"/rest/api/2/issue/{issue_key}/transitions",
-            authorization,
-            json_data=json_data,
-            acting_user=acting_user
-        )
+        await self._make_request("POST", f"/rest/api/2/issue/{issue_key}/transitions", authorization, json_data=json_data)
 
-    async def create_issue(
-        self,
-        authorization: str,
-        issue_data: CreateIssueRequest,
-        acting_user: Optional[str] = None
-    ) -> Issue:
+    async def create_issue(self, authorization: str, issue_data: CreateIssueRequest) -> Issue:
         """Create a new issue"""
-        data = await self._make_request(
-            "POST",
-            "/rest/api/2/issue",
-            authorization,
-            json_data=issue_data.dict(),
-            acting_user=acting_user
-        )
+        data = await self._make_request("POST", "/rest/api/2/issue", authorization, json_data=issue_data.dict())
         return Issue(**data)
 
-    async def update_issue(
-        self,
-        authorization: str,
-        issue_key: str,
-        update_data: UpdateIssueRequest,
-        acting_user: Optional[str] = None
-    ):
+    async def update_issue(self, authorization: str, issue_key: str, update_data: UpdateIssueRequest):
         """Update an existing issue"""
-        await self._make_request(
-            "PUT",
-            f"/rest/api/2/issue/{issue_key}",
-            authorization,
-            json_data=update_data.dict(exclude_none=True),
-            acting_user=acting_user
-        )
+        await self._make_request("PUT", f"/rest/api/2/issue/{issue_key}", authorization, json_data=update_data.dict(exclude_none=True))
 
-    async def get_projects(self, authorization: str, acting_user: Optional[str] = None) -> List[Project]:
+    async def get_projects(self, authorization: str) -> List[Project]:
         """Get all projects"""
-        data = await self._make_request(
-            "GET",
-            "/rest/api/2/project",
-            authorization,
-            acting_user=acting_user
-        )
+        data = await self._make_request("GET", "/rest/api/2/project", authorization)
         return [Project(**project) for project in data]
 
-    async def get_project(
-        self,
-        authorization: str,
-        project_key: str,
-        acting_user: Optional[str] = None
-    ) -> Project:
+    async def get_project(self, authorization: str, project_key: str) -> Project:
         """Get specific project by key"""
-        data = await self._make_request(
-            "GET",
-            f"/rest/api/2/project/{project_key}",
-            authorization,
-            acting_user=acting_user
-        )
+        data = await self._make_request("GET", f"/rest/api/2/project/{project_key}", authorization)
         return Project(**data)
 
 
