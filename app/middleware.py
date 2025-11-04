@@ -71,49 +71,55 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         request_id = str(uuid.uuid4())
         request.state.request_id = request_id
 
+        # Skip logging for health check endpoints
+        is_health_check = request.url.path.endswith("/health")
+
         # Log basic request info
         start_time = time.time()
-        client_host = request.client.host if request.client else 'unknown'
-        query_params = str(request.query_params) if request.query_params else ""
 
-        log_msg = f"Request {request_id}: {request.method} {request.url.path} from {client_host}"
-        if query_params:
-            log_msg += f"\nQuery: {query_params}"
+        if not is_health_check:
+            client_host = request.client.host if request.client else 'unknown'
+            query_params = str(request.query_params) if request.query_params else ""
 
-        # Try to get request body for logging
-        try:
-            if request.method in ("POST", "PUT", "PATCH"):
-                body = await request.body()
-                if body:
-                    formatted_body = self._format_body_for_logging(body)
-                    if formatted_body:
-                        log_msg += f"\nRequest Body:\n{formatted_body}"
-        except Exception as e:
-            logger.debug(f"Failed to read request body: {e}")
+            log_msg = f"Request {request_id}: {request.method} {request.url.path} from {client_host}"
+            if query_params:
+                log_msg += f"\nQuery: {query_params}"
 
-        logger.debug(log_msg)
+            # Try to get request body for logging
+            try:
+                if request.method in ("POST", "PUT", "PATCH"):
+                    body = await request.body()
+                    if body:
+                        formatted_body = self._format_body_for_logging(body)
+                        if formatted_body:
+                            log_msg += f"\nRequest Body:\n{formatted_body}"
+            except Exception as e:
+                logger.debug(f"Failed to read request body: {e}")
+
+            logger.debug(log_msg)
 
         # Process request
         try:
             response = await call_next(request)
             process_time = time.time() - start_time
 
-            # Log response
-            log_msg = f"Response {request_id}: {response.status_code} in {process_time:.3f}s"
+            # Log response (skip for health check)
+            if not is_health_check:
+                log_msg = f"Response {request_id}: {response.status_code} in {process_time:.3f}s"
 
-            # Try to get response body for logging
-            try:
-                if (hasattr(response, 'body') and
-                    response.headers.get('content-type', '').startswith('application/json')):
+                # Try to get response body for logging
+                try:
+                    if (hasattr(response, 'body') and
+                        response.headers.get('content-type', '').startswith('application/json')):
 
-                    if hasattr(response, 'body') and response.body:
-                        formatted_body = self._format_body_for_logging(response.body)
-                        if formatted_body:
-                            log_msg += f"\nResponse Body:\n{formatted_body}"
-            except Exception as e:
-                logger.debug(f"Failed to read response body: {e}")
+                        if hasattr(response, 'body') and response.body:
+                            formatted_body = self._format_body_for_logging(response.body)
+                            if formatted_body:
+                                log_msg += f"\nResponse Body:\n{formatted_body}"
+                except Exception as e:
+                    logger.debug(f"Failed to read response body: {e}")
 
-            logger.debug(log_msg)
+                logger.debug(log_msg)
 
             # Add headers
             response.headers["X-Request-ID"] = request_id
