@@ -77,6 +77,11 @@ class JiraClient:
                     timeout=30.0
                 )
                 response.raise_for_status()
+
+                # Handle empty responses (e.g., 204 No Content)
+                if not response.content:
+                    return {}
+
                 return response.json()
             except httpx.ConnectError as e:
                 logger.error(f"Connection error to Jira: {str(e)}")
