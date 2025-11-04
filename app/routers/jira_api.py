@@ -1,10 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query, Path, Body, Header
-from typing import Optional, List
+from typing import Optional
 from app.services.jira_client import jira_client
-from app.models.jira import (
-    ServerInfo, Issue, SearchResult, TransitionResponse,
-    CreateIssueRequest, UpdateIssueRequest, Project
-)
+from app.models.jira import CreateIssueRequest, UpdateIssueRequest
 import logging
 
 logger = logging.getLogger(__name__)
@@ -12,7 +9,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/rest/api/2")
 
 
-@router.get("/serverInfo", response_model=ServerInfo)
+@router.get("/serverInfo")
 async def get_server_info(authorization: Optional[str] = Header(None)):
     """Get Jira server information - Required for JetBrains IDE compatibility
 
@@ -25,7 +22,7 @@ async def get_server_info(authorization: Optional[str] = Header(None)):
         raise HTTPException(status_code=500, detail="Failed to get server information")
 
 
-@router.get("/search", response_model=SearchResult)
+@router.get("/search")
 async def search_issues(
     jql: str = Query(..., description="JQL query string"),
     startAt: int = Query(0, description="Starting index"),
@@ -45,7 +42,7 @@ async def search_issues(
         raise HTTPException(status_code=500, detail="Failed to search issues")
 
 
-@router.get("/issue/{issue_key}", response_model=Issue)
+@router.get("/issue/{issue_key}")
 async def get_issue(
     issue_key: str = Path(..., description="Issue key (e.g., PROJ-123)"),
     fields: Optional[str] = Query(None, description="Comma-separated list of fields to return"),
@@ -81,7 +78,7 @@ async def update_issue(
         raise HTTPException(status_code=500, detail=f"Failed to update issue {issue_key}")
 
 
-@router.get("/issue/{issue_key}/transitions", response_model=TransitionResponse)
+@router.get("/issue/{issue_key}/transitions")
 async def get_issue_transitions(
     issue_key: str = Path(..., description="Issue key (e.g., PROJ-123)"),
     authorization: Optional[str] = Header(None)
@@ -122,7 +119,7 @@ async def transition_issue(
         raise HTTPException(status_code=500, detail=f"Failed to transition issue {issue_key}")
 
 
-@router.post("/issue", response_model=Issue)
+@router.post("/issue")
 async def create_issue(
     issue_data: CreateIssueRequest,
     authorization: Optional[str] = Header(None)
@@ -138,7 +135,7 @@ async def create_issue(
         raise HTTPException(status_code=500, detail="Failed to create issue")
 
 
-@router.get("/project", response_model=List[Project])
+@router.get("/project")
 async def get_projects(authorization: Optional[str] = Header(None)):
     """Get all projects
 
@@ -151,7 +148,7 @@ async def get_projects(authorization: Optional[str] = Header(None)):
         raise HTTPException(status_code=500, detail="Failed to get projects")
 
 
-@router.get("/project/{project_key}", response_model=Project)
+@router.get("/project/{project_key}")
 async def get_project(
     project_key: str = Path(..., description="Project key (e.g., PROJ)"),
     authorization: Optional[str] = Header(None)
