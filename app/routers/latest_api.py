@@ -14,10 +14,13 @@ router = APIRouter(prefix="/rest/api/latest")
 
 
 @router.get("/serverInfo", response_model=ServerInfo)
-async def get_server_info(authorization: str = Header(..., description="Authorization header (e.g., 'Basic <base64>' or 'Bearer <token>')")):
-    """Get Jira server information - Required for JetBrains IDE compatibility (latest API)"""
+async def get_server_info(authorization: Optional[str] = Header(None)):
+    """Get Jira server information - Required for JetBrains IDE compatibility (latest API)
+
+    Note: Authorization header is ignored. All requests use service account credentials from .env
+    """
     try:
-        return await jira_client.get_server_info(authorization)
+        return await jira_client.get_server_info()
     except Exception as e:
         logger.debug(f"Failed to get server info: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to get server information")
@@ -29,12 +32,15 @@ async def search_issues(
     startAt: int = Query(0, description="Starting index"),
     maxResults: int = Query(50, description="Maximum number of results"),
     fields: Optional[str] = Query(None, description="Comma-separated list of fields to return"),
-    authorization: str = Header(..., description="Authorization header (e.g., 'Basic <base64>' or 'Bearer <token>')")
+    authorization: Optional[str] = Header(None)
 ):
-    """Search issues using JQL"""
+    """Search issues using JQL
+
+    Note: Authorization header is ignored. All requests use service account credentials from .env
+    """
     try:
         field_list = fields.split(",") if fields else None
-        return await jira_client.search_issues(authorization, jql, startAt, maxResults, field_list)
+        return await jira_client.search_issues(jql, startAt, maxResults, field_list)
     except Exception as e:
         logger.debug(f"Failed to search issues: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to search issues")
@@ -46,12 +52,15 @@ async def search_issues_jql(
     startAt: int = Query(0, description="Starting index"),
     maxResults: int = Query(160, description="Maximum number of results"),
     fields: Optional[str] = Query(None, description="Comma-separated list of fields to return"),
-    authorization: str = Header(..., description="Authorization header (e.g., 'Basic <base64>' or 'Bearer <token>')")
+    authorization: Optional[str] = Header(None)
 ):
-    """Search issues using JQL - JetBrains IDE specific endpoint"""
+    """Search issues using JQL - JetBrains IDE specific endpoint
+
+    Note: Authorization header is ignored. All requests use service account credentials from .env
+    """
     try:
         field_list = fields.split(",") if fields else None
-        return await jira_client.search_issues(authorization, jql, startAt, maxResults, field_list)
+        return await jira_client.search_issues(jql, startAt, maxResults, field_list)
     except Exception as e:
         logger.debug(f"Failed to search issues via JQL endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to search issues")
@@ -61,12 +70,15 @@ async def search_issues_jql(
 async def get_issue(
     issue_key: str = Path(..., description="Issue key (e.g., PROJ-123)"),
     fields: Optional[str] = Query(None, description="Comma-separated list of fields to return"),
-    authorization: str = Header(..., description="Authorization header (e.g., 'Basic <base64>' or 'Bearer <token>')")
+    authorization: Optional[str] = Header(None)
 ):
-    """Get specific issue by key"""
+    """Get specific issue by key
+
+    Note: Authorization header is ignored. All requests use service account credentials from .env
+    """
     try:
         field_list = fields.split(",") if fields else None
-        return await jira_client.get_issue(authorization, issue_key, field_list)
+        return await jira_client.get_issue(issue_key, field_list)
     except Exception as e:
         logger.debug(f"Failed to get issue {issue_key}: {str(e)}")
         raise HTTPException(status_code=404, detail=f"Issue {issue_key} not found")
@@ -76,11 +88,14 @@ async def get_issue(
 async def update_issue(
     issue_key: str = Path(..., description="Issue key (e.g., PROJ-123)"),
     update_data: UpdateIssueRequest = Body(...),
-    authorization: str = Header(..., description="Authorization header (e.g., 'Basic <base64>' or 'Bearer <token>')")
+    authorization: Optional[str] = Header(None)
 ):
-    """Update an existing issue"""
+    """Update an existing issue
+
+    Note: Authorization header is ignored. All requests use service account credentials from .env
+    """
     try:
-        await jira_client.update_issue(authorization, issue_key, update_data)
+        await jira_client.update_issue(issue_key, update_data)
         return {"message": f"Issue {issue_key} updated successfully"}
     except Exception as e:
         logger.debug(f"Failed to update issue {issue_key}: {str(e)}")
@@ -90,11 +105,14 @@ async def update_issue(
 @router.get("/issue/{issue_key}/transitions", response_model=TransitionResponse)
 async def get_issue_transitions(
     issue_key: str = Path(..., description="Issue key (e.g., PROJ-123)"),
-    authorization: str = Header(..., description="Authorization header (e.g., 'Basic <base64>' or 'Bearer <token>')")
+    authorization: Optional[str] = Header(None)
 ):
-    """Get available transitions for an issue"""
+    """Get available transitions for an issue
+
+    Note: Authorization header is ignored. All requests use service account credentials from .env
+    """
     try:
-        return await jira_client.get_issue_transitions(authorization, issue_key)
+        return await jira_client.get_issue_transitions(issue_key)
     except Exception as e:
         logger.debug(f"Failed to get transitions for issue {issue_key}: {str(e)}")
         raise HTTPException(status_code=404, detail=f"Issue {issue_key} not found")
@@ -104,16 +122,19 @@ async def get_issue_transitions(
 async def transition_issue(
     issue_key: str = Path(..., description="Issue key (e.g., PROJ-123)"),
     transition_data: dict = Body(..., description="Transition data with id and optional fields"),
-    authorization: str = Header(..., description="Authorization header (e.g., 'Basic <base64>' or 'Bearer <token>')")
+    authorization: Optional[str] = Header(None)
 ):
-    """Transition an issue to a new status"""
+    """Transition an issue to a new status
+
+    Note: Authorization header is ignored. All requests use service account credentials from .env
+    """
     try:
         transition_id = transition_data.get("transition", {}).get("id")
         if not transition_id:
             raise HTTPException(status_code=400, detail="Transition ID is required")
 
         fields = transition_data.get("fields")
-        await jira_client.transition_issue(authorization, issue_key, transition_id, fields)
+        await jira_client.transition_issue(issue_key, transition_id, fields)
         return {"message": f"Issue {issue_key} transitioned successfully"}
     except HTTPException:
         raise
@@ -125,21 +146,27 @@ async def transition_issue(
 @router.post("/issue", response_model=Issue)
 async def create_issue(
     issue_data: CreateIssueRequest,
-    authorization: str = Header(..., description="Authorization header (e.g., 'Basic <base64>' or 'Bearer <token>')")
+    authorization: Optional[str] = Header(None)
 ):
-    """Create a new issue"""
+    """Create a new issue
+
+    Note: Authorization header is ignored. All requests use service account credentials from .env
+    """
     try:
-        return await jira_client.create_issue(authorization, issue_data)
+        return await jira_client.create_issue(issue_data)
     except Exception as e:
         logger.debug(f"Failed to create issue: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to create issue")
 
 
 @router.get("/project", response_model=List[Project])
-async def get_projects(authorization: str = Header(..., description="Authorization header (e.g., 'Basic <base64>' or 'Bearer <token>')")):
-    """Get all projects"""
+async def get_projects(authorization: Optional[str] = Header(None)):
+    """Get all projects
+
+    Note: Authorization header is ignored. All requests use service account credentials from .env
+    """
     try:
-        return await jira_client.get_projects(authorization)
+        return await jira_client.get_projects()
     except Exception as e:
         logger.debug(f"Failed to get projects: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to get projects")
@@ -148,11 +175,14 @@ async def get_projects(authorization: str = Header(..., description="Authorizati
 @router.get("/project/{project_key}", response_model=Project)
 async def get_project(
     project_key: str = Path(..., description="Project key (e.g., PROJ)"),
-    authorization: str = Header(..., description="Authorization header (e.g., 'Basic <base64>' or 'Bearer <token>')")
+    authorization: Optional[str] = Header(None)
 ):
-    """Get specific project by key"""
+    """Get specific project by key
+
+    Note: Authorization header is ignored. All requests use service account credentials from .env
+    """
     try:
-        return await jira_client.get_project(authorization, project_key)
+        return await jira_client.get_project(project_key)
     except Exception as e:
         logger.debug(f"Failed to get project {project_key}: {str(e)}")
         raise HTTPException(status_code=404, detail=f"Project {project_key} not found")

@@ -6,9 +6,10 @@ JetBrains IDE와 호환되는 Jira API Proxy 서버입니다. 이 프록시 서�
 
 - ✅ Jira REST API v2 호환 엔드포인트 제공
 - ✅ JetBrains IDE Task Management 완벽 지원
-- ✅ **유연한 인증 모드**
-  - 서비스 계정을 통한 중앙화된 인증 (선택사항)
-  - 요청별 개별 사용자 인증 지원
+- ✅ **서비스 계정 인증**
+  - 중앙화된 자격증명으로 모든 API 호출 관리
+  - IDE의 Authorization 헤더는 무시됨
+  - 모든 Jira Activity가 서비스 계정으로 기록
 - ✅ Docker 컨테이너 지원
 - ✅ 종합적인 에러 핸들링 및 로깅
 - ✅ CORS 및 보안 헤더 지원
@@ -51,11 +52,11 @@ cp .env.example .env
 # Jira Configuration
 JIRA_BASE_URL=https://your-jira-instance.atlassian.net
 
-# Service Account Credentials (Optional)
-# 설정하면 모든 API 호출에 이 자격증명을 사용합니다
-# 설정하지 않으면 각 요청의 Authorization 헤더의 자격증명을 사용합니다
-JIRA_SERVICE_USERNAME=
-JIRA_SERVICE_API_TOKEN=
+# Service Account Credentials (Required)
+# 모든 API 호출에 이 서비스 계정 자격증명을 사용합니다
+# 모든 Jira Activity가 이 계정으로 기록됩니다
+JIRA_SERVICE_USERNAME=service-account@company.com
+JIRA_SERVICE_API_TOKEN=service-account-api-token
 
 # Proxy Server Configuration
 PROXY_HOST=0.0.0.0
@@ -95,27 +96,21 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 5. `Generic` 또는 `JIRA` 선택
 6. 다음 설정을 입력:
    - **Server URL**: `http://localhost:8000` (또는 프록시 서버 주소)
-   - **Username**: Jira 사용자명
-   - **Password**: Jira API 토큰
+   - **Username**: (아무 값이나 입력 가능, 무시됨)
+   - **Password**: (아무 값이나 입력 가능, 무시됨)
 
 ### 설정 예시
 
-**옵션 1: 개별 사용자 인증 (서비스 계정 미설정)**
 ```
 Server URL: http://localhost:8000
-Username: john.doe@company.com
-Password: user-jira-api-token
+Username: dummy
+Password: dummy
 ```
-→ 각 사용자의 자격증명으로 인증하며, Jira에서 해당 사용자로 활동이 기록됩니다.
 
-**옵션 2: 서비스 계정 인증 (서비스 계정 설정)**
-```
-Server URL: http://localhost:8000
-Username: (아무 값이나 입력 가능)
-Password: (아무 값이나 입력 가능)
-```
-→ `.env`에 설정된 서비스 계정으로 모든 API 호출이 이루어지며, Jira에서 서비스 계정으로 활동이 기록됩니다.
-→ IDE에 입력한 Username/Password는 무시됩니다.
+**중요**:
+- IDE에서 입력하는 Username/Password는 무시됩니다
+- 모든 API 호출은 `.env` 파일의 서비스 계정 자격증명을 사용합니다
+- 모든 Jira Activity는 서비스 계정으로 기록됩니다
 
 ## API 사용 예시
 
@@ -170,13 +165,13 @@ JiraProxy/
 └── README.md              # 프로젝트 문서
 ```
 
-## 서비스 계정 인증 (선택사항)
+## 서비스 계정 인증
 
-서비스 계정 기능을 사용하면 중앙화된 자격증명으로 모든 API 호출을 관리할 수 있습니다.
+이 프록시는 중앙화된 서비스 계정 자격증명으로 모든 API 호출을 관리합니다.
 
-### 사용 방법
+### 설정 방법
 
-`.env` 파일에 서비스 계정 자격증명을 설정:
+`.env` 파일에 서비스 계정 자격증명을 **반드시** 설정해야 합니다:
 ```env
 JIRA_SERVICE_USERNAME=service-account@company.com
 JIRA_SERVICE_API_TOKEN=service-account-api-token
@@ -187,12 +182,13 @@ JIRA_SERVICE_API_TOKEN=service-account-api-token
 - **중앙화된 관리**: 하나의 서비스 계정으로 모든 API 접근 관리
 - **간편한 설정**: 개별 사용자의 API 토큰을 관리할 필요 없음
 - **Activity 기록**: Jira에서 모든 활동이 서비스 계정으로 기록됨
+- **IDE 인증 무시**: JetBrains IDE에서 입력한 Username/Password는 무시됨
 
 ### 주의사항
 
-- 서비스 계정을 사용하면 누가 작업을 수행했는지 Jira에서 구분할 수 없습니다
-- 개별 사용자 추적이 필요한 경우 서비스 계정을 설정하지 마세요
-- 서비스 계정에는 필요한 최소 권한만 부여하세요 (최소 권한 원칙)
+- ⚠️ **사용자 구분 불가**: 누가 작업을 수행했는지 Jira에서 구분할 수 없습니다
+- ⚠️ **필수 설정**: 서비스 계정 자격증명이 없으면 프록시가 작동하지 않습니다
+- 🔒 **최소 권한 원칙**: 서비스 계정에는 필요한 최소 권한만 부여하세요
 
 ## 보안 고려사항
 
@@ -229,7 +225,8 @@ docker-compose logs -f
 ### 일반적인 문제
 
 1. **Jira 연결 실패**
-   - `.env` 파일의 `JIRA_BASE_URL`, `JIRA_SERVICE_USERNAME`, `JIRA_SERVICE_API_TOKEN` 확인
+   - `.env` 파일의 `JIRA_BASE_URL` 확인
+   - `.env` 파일의 `JIRA_SERVICE_USERNAME`, `JIRA_SERVICE_API_TOKEN` 확인 (필수)
    - 서비스 계정의 Jira API 토큰이 올바른지 확인
    - 네트워크 연결 상태 확인
 
@@ -239,9 +236,9 @@ docker-compose logs -f
    - Health Check 엔드포인트 확인: `http://localhost:8000/rest/api/2/health`
 
 3. **권한 오류**
-   - 사용 중인 Jira 계정의 권한 확인
-   - API 토큰의 유효성 확인
-   - 서비스 계정을 사용하는 경우, 서비스 계정의 권한 확인
+   - 서비스 계정의 Jira 권한 확인
+   - 서비스 계정 API 토큰의 유효성 확인
+   - 서비스 계정에 프로젝트 접근 권한이 있는지 확인
 
 ### 디버깅
 
