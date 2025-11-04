@@ -3,6 +3,8 @@ services:
     build: .
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
       # Jira Configuration - authentication is now handled per-request
       JIRA_BASE_URL: "${JIRA_BASE_URL:-https://your-jira-instance.atlassian.net}"
