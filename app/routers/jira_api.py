@@ -5,6 +5,7 @@ from app.models.jira import (
     ServerInfo, Issue, SearchResult, TransitionResponse,
     CreateIssueRequest, UpdateIssueRequest, Project
 )
+from app.utils import extract_username_from_auth_header
 import logging
 
 logger = logging.getLogger(__name__)
@@ -16,7 +17,8 @@ router = APIRouter(prefix="/rest/api/2")
 async def get_server_info(authorization: str = Header(..., description="Authorization header (e.g., 'Basic <base64>' or 'Bearer <token>')")):
     """Get Jira server information - Required for JetBrains IDE compatibility"""
     try:
-        return await jira_client.get_server_info(authorization)
+        acting_user = extract_username_from_auth_header(authorization)
+        return await jira_client.get_server_info(authorization, acting_user)
     except Exception as e:
         logger.debug(f"Failed to get server info: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to get server information")
@@ -32,8 +34,9 @@ async def search_issues(
 ):
     """Search issues using JQL"""
     try:
+        acting_user = extract_username_from_auth_header(authorization)
         field_list = fields.split(",") if fields else None
-        return await jira_client.search_issues(authorization, jql, startAt, maxResults, field_list)
+        return await jira_client.search_issues(authorization, jql, startAt, maxResults, field_list, acting_user)
     except Exception as e:
         logger.debug(f"Failed to search issues: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to search issues")
@@ -47,8 +50,9 @@ async def get_issue(
 ):
     """Get specific issue by key"""
     try:
+        acting_user = extract_username_from_auth_header(authorization)
         field_list = fields.split(",") if fields else None
-        return await jira_client.get_issue(authorization, issue_key, field_list)
+        return await jira_client.get_issue(authorization, issue_key, field_list, acting_user)
     except Exception as e:
         logger.debug(f"Failed to get issue {issue_key}: {str(e)}")
         raise HTTPException(status_code=404, detail=f"Issue {issue_key} not found")
@@ -62,7 +66,8 @@ async def update_issue(
 ):
     """Update an existing issue"""
     try:
-        await jira_client.update_issue(authorization, issue_key, update_data)
+        acting_user = extract_username_from_auth_header(authorization)
+        await jira_client.update_issue(authorization, issue_key, update_data, acting_user)
         return {"message": f"Issue {issue_key} updated successfully"}
     except Exception as e:
         logger.debug(f"Failed to update issue {issue_key}: {str(e)}")
@@ -76,7 +81,8 @@ async def get_issue_transitions(
 ):
     """Get available transitions for an issue"""
     try:
-        return await jira_client.get_issue_transitions(authorization, issue_key)
+        acting_user = extract_username_from_auth_header(authorization)
+        return await jira_client.get_issue_transitions(authorization, issue_key, acting_user)
     except Exception as e:
         logger.debug(f"Failed to get transitions for issue {issue_key}: {str(e)}")
         raise HTTPException(status_code=404, detail=f"Issue {issue_key} not found")
@@ -90,12 +96,13 @@ async def transition_issue(
 ):
     """Transition an issue to a new status"""
     try:
+        acting_user = extract_username_from_auth_header(authorization)
         transition_id = transition_data.get("transition", {}).get("id")
         if not transition_id:
             raise HTTPException(status_code=400, detail="Transition ID is required")
 
         fields = transition_data.get("fields")
-        await jira_client.transition_issue(authorization, issue_key, transition_id, fields)
+        await jira_client.transition_issue(authorization, issue_key, transition_id, fields, acting_user)
         return {"message": f"Issue {issue_key} transitioned successfully"}
     except HTTPException:
         raise
@@ -111,7 +118,8 @@ async def create_issue(
 ):
     """Create a new issue"""
     try:
-        return await jira_client.create_issue(authorization, issue_data)
+        acting_user = extract_username_from_auth_header(authorization)
+        return await jira_client.create_issue(authorization, issue_data, acting_user)
     except Exception as e:
         logger.debug(f"Failed to create issue: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to create issue")
@@ -121,7 +129,8 @@ async def create_issue(
 async def get_projects(authorization: str = Header(..., description="Authorization header (e.g., 'Basic <base64>' or 'Bearer <token>')")):
     """Get all projects"""
     try:
-        return await jira_client.get_projects(authorization)
+        acting_user = extract_username_from_auth_header(authorization)
+        return await jira_client.get_projects(authorization, acting_user)
     except Exception as e:
         logger.debug(f"Failed to get projects: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to get projects")
@@ -134,7 +143,8 @@ async def get_project(
 ):
     """Get specific project by key"""
     try:
-        return await jira_client.get_project(authorization, project_key)
+        acting_user = extract_username_from_auth_header(authorization)
+        return await jira_client.get_project(authorization, project_key, acting_user)
     except Exception as e:
         logger.debug(f"Failed to get project {project_key}: {str(e)}")
         raise HTTPException(status_code=404, detail=f"Project {project_key} not found")
